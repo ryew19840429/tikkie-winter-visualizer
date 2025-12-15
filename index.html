@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tikkie Winter Visualizer</title>
+  </head>
+  <body>
+    <div id="overlay">
+      <div class="content">
+        <h1>Tikkie Visualizer</h1>
+        <p id="status-text">Upload an MP3 to start the magic</p>
+        <button id="upload-btn">Upload MP3</button>
+        <input type="file" id="file-input" accept="audio/mp3,audio/*" style="display:none">
+      </div>
+    </div>
+    <canvas id="canvas1"></canvas>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
