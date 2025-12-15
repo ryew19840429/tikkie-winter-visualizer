@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AudioController } from './audio.js';
 import { Grid3D } from './grid3d.js';
 import { ParticleSystem3D } from './particles3d.js';
+import { BackgroundSystem } from './background.js';
 
 // Setup Three.js
 const scene = new THREE.Scene();
@@ -23,6 +24,7 @@ controls.enableDamping = true;
 camera.position.z = 100;
 
 const audioController = new AudioController();
+const background = new BackgroundSystem(scene);
 const grid3d = new Grid3D(scene);
 const particles = new ParticleSystem3D(scene);
 
@@ -72,6 +74,7 @@ function animate() {
   audioController.update();
   const audioData = audioController.getAudioData();
 
+  background.update(audioData);
   grid3d.update(audioData);
   particles.update(audioData);
 
