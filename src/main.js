@@ -62,10 +62,7 @@ function animate() {
 
   // Visual feedback for deep bass/beat
   if (audioData.isBeat) {
-    document.body.style.backgroundColor = `rgb(25, 25, 45)`;
-    setTimeout(() => {
-      document.body.style.backgroundColor = '#0f0f1e';
-    }, 100);
+    // No color shift, just physics
   }
 
   gridSystem.update(audioData);

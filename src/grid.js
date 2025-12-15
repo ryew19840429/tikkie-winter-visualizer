@@ -78,8 +78,8 @@ export class GridCell {
                 this.targetOffsetX = (Math.random() - 0.5) * 20;
                 this.targetOffsetY = (Math.random() - 0.5) * 20;
             } else {
-                // Variation 4: Flash Opacity
-                this.opacity = 0.4;
+                // Variation 4: Slide (Alternative to Opacity)
+                this.targetOffsetX = (Math.random() - 0.5) * 15;
             }
         } else if (!isBeat) {
             // Keep rotation logic sticky if needed, or reset?
@@ -118,7 +118,7 @@ export class GridCell {
 export class GridSystem {
     constructor() {
         this.cells = [];
-        this.cols = 16;
+        this.cols = 8;
         this.rows = 0; // Calculated based on aspect ratio
     }
 
@@ -138,8 +138,12 @@ export class GridSystem {
         // Let's just divide the height by the same cellWidth to get square-ish cells, 
         // OR just divide height by X rows where X is calculated to keep aspect ratio.
 
-        const cellHeight = cellWidth; // Let's try square cells first
-        this.rows = Math.ceil(imgHeight / cellHeight);
+        // Calculate rows to maintain mostly-square aspect ratio
+        this.rows = Math.round(imgHeight / cellWidth);
+
+        // Adjust cellHeight so it strictly fits the image height
+        // This makes boxes slightly rectangular but ensures no cut-off or partial rows
+        const cellHeight = imgHeight / this.rows;
 
         // Calculate Screen Display Size
         // We want to fit the logo on screen with some padding.
