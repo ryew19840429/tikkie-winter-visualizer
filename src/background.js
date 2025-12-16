@@ -34,92 +34,140 @@ export class BackgroundSystem {
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(this.count * 3);
         const colors = new Float32Array(this.count * 3);
-        const phases = new Float32Array(this.count); // For individual twinkling
+
+        // Store particle state on CPU for logic
+        this.particleData = [];
 
         const palette = [
             new THREE.Color(0xff0044), // Red
             new THREE.Color(0x00ff88), // Teal-Green
             new THREE.Color(0x4444ff), // Indigo
             new THREE.Color(0xffaa22), // Warm Gold
+            new THREE.Color(0xff00ff), // Magenta
         ];
 
         for (let i = 0; i < this.count; i++) {
-            // Spread them slightly wider and vertically
-            const x = (Math.random() - 0.5) * 500;
-            const y = (Math.random() - 0.5) * 400;
-            const z = -60 - Math.random() * 120;
+            // Assign random init properties
+            const p = this.createParticleData(palette);
 
-            positions[i * 3] = x;
-            positions[i * 3 + 1] = y;
-            positions[i * 3 + 2] = z;
+            // Start Hidden
+            p.active = false;
+            p.progress = 0;
 
-            // Random Color
-            const color = palette[Math.floor(Math.random() * palette.length)];
-            colors[i * 3] = color.r;
-            colors[i * 3 + 1] = color.g;
-            colors[i * 3 + 2] = color.b;
+            this.particleData.push(p);
 
-            // Random Twinkle Phase
-            phases[i] = Math.random() * Math.PI * 2;
+            // Init off-screen or invisible
+            positions[i * 3] = 0;
+            positions[i * 3 + 1] = 0;
+            positions[i * 3 + 2] = -5000; // Far away
+
+            colors[i * 3] = 0;
+            colors[i * 3 + 1] = 0;
+            colors[i * 3 + 2] = 0;
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        geometry.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
 
         // Material
         const texture = this.createBokehTexture();
         this.material = new THREE.PointsMaterial({
             map: texture,
-            size: 60, // Large and soft
+            size: 120, // Much bigger base size
             vertexColors: true,
             transparent: true,
-            opacity: 0.8,
-            blending: THREE.NormalBlending, // Smoother than Additive (prevents whiteout)
+            opacity: 1.0,
+            blending: THREE.NormalBlending,
             depthWrite: false
         });
 
         this.points = new THREE.Points(geometry, this.material);
+        this.points.frustumCulled = false; // Prevent culling when moving points into view
         this.group.add(this.points);
+    }
+
+    createParticleData(palette) {
+        const color = palette[Math.floor(Math.random() * palette.length)];
+        return {
+            x: 0, y: 0, z: 0,
+            color: color,
+            baseR: color.r,
+            baseG: color.g,
+            baseB: color.b,
+            speed: 0.01 + Math.random() * 0.03, // Varied speeds
+            progress: 0,
+            active: false, // Start hidden
+        };
     }
 
     update(audioData) {
         const { avgEnergy, isBeat } = audioData;
-        const time = Date.now() * 0.001;
-        const phases = this.points.geometry.attributes.phase.array;
+        const positions = this.points.geometry.attributes.position.array;
         const colors = this.points.geometry.attributes.color.array;
 
-        // "Twinkle" effect: Instead of global fading, we modulate brightness individually
-        // We can't easily modulate alpha per-vertex without a shader, but we CAN modulate vertex color brightness!
-
-        // Base audio boost
-        const boost = (avgEnergy / 255) * 0.3;
-
-        for (let i = 0; i < this.count; i++) {
-            // Calculate a sine wave pulse based on phase + time
-            // Add audio energy to speed up the pulse slightly or increase intensity
-            const pulse = Math.sin(time * 2 + phases[i]) * 0.5 + 0.5; // 0 to 1
-
-            // Current brightness = Base glow + Twinkle + Audio Bump
-            const brightness = 0.5 + (pulse * 0.3) + boost;
-
-            // We need to re-apply the base color * brightness
-            // This is a bit expensive to do every frame on CPU for thousands, but for <200 it's free.
-            // Wait, we lost the original color reference.
-            // Let's assume the colors in the array are the target 'max' colors.
-            // Actually, simply modulating opacity globally is easier, but 'twinkling' implies individual variance.
-
-            // Let's stick to a simpler approach: 
-            // The shader is best for this. But since we are using PointsMaterial, we are limited.
-            // Let's just do gentle global movement and soft, slow transparency pulse.
+        // Count how many to spawn this frame
+        // On beat, spawn a burst. Randomly spawn quiet ones otherwise?
+        // Let's rely mostly on beats for that "following the music" feel.
+        let spawnCount = 0;
+        if (isBeat) {
+            spawnCount = 3 + Math.floor((avgEnergy / 255) * 5);
+        } else if (Math.random() > 0.95) {
+            spawnCount = 1; // Occasional random blink
         }
 
-        // Revised Update Logic for Elegance:
-        // 1. Very slow Drift
-        this.group.rotation.z = Math.sin(time * 0.05) * 0.05;
+        for (let i = 0; i < this.count; i++) {
+            const p = this.particleData[i];
 
-        // 2. Soft pulsing opacity (Global) - Breathing effect
-        const breath = Math.sin(time * 0.5) * 0.1 + 0.8; // 0.7 to 0.9
-        this.material.opacity = breath * (0.6 + boost * 0.5);
+            if (p.active) {
+                // Advance
+                p.progress += p.speed;
+
+                // Death
+                if (p.progress >= 1.0) {
+                    p.active = false;
+                    p.progress = 0;
+                    // Hide
+                    colors[i * 3] = 0;
+                    colors[i * 3 + 1] = 0;
+                    colors[i * 3 + 2] = 0;
+                    continue; // Skip rendering
+                }
+
+                // Render Logic
+                // Sine wave opacity: 0 -> 1 -> 0
+                let alpha = Math.sin(p.progress * Math.PI);
+
+                // Audio modulation: Brighten active ones with current energy
+                alpha *= (1.0 + (avgEnergy / 255) * 0.5);
+
+                colors[i * 3] = p.baseR * alpha;
+                colors[i * 3 + 1] = p.baseG * alpha;
+                colors[i * 3 + 2] = p.baseB * alpha;
+
+            } else {
+                // Inactive
+                if (spawnCount > 0) {
+                    // SPAWN!
+                    spawnCount--;
+                    p.active = true;
+                    p.progress = 0;
+                    // Much wider range for "Random Size" effect via perspective
+                    p.x = (Math.random() - 0.5) * 1200;
+                    p.y = (Math.random() - 0.5) * 800;
+                    p.z = -100 - Math.random() * 400; // -100 to -500
+
+                    // Update Position immediately
+                    positions[i * 3] = p.x;
+                    positions[i * 3 + 1] = p.y;
+                    positions[i * 3 + 2] = p.z;
+                }
+            }
+        }
+
+        this.points.geometry.attributes.position.needsUpdate = true;
+        this.points.geometry.attributes.color.needsUpdate = true;
+
+        // Gentle rotation
+        this.group.rotation.z += 0.0005;
     }
 }

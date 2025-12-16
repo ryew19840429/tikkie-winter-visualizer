@@ -127,47 +127,55 @@ export class Grid3D {
         }
     }
 
-    update(audioData) {
-        // Dynamic Resizing Logic - DISABLED per user request
+    setJitter(val) {
+        this.jitterAmount = val;
+    }
 
+    update(audioData) {
         const { frequencyData, isBeat } = audioData;
+
+        // Default jitter if not set (though it's set in constructor now)
+        if (this.jitterAmount === undefined) this.jitterAmount = 0.5;
 
         this.meshes.forEach(mesh => {
             const freq = frequencyData[mesh.userData.mappedIndex % frequencyData.length];
-            // Boost reaction sensitivity
             const normFreq = freq / 255;
 
-            // Logic
             mesh.userData.targetScale = 1;
             mesh.userData.targetZ = 0;
             mesh.userData.targetRotX = 0;
             mesh.userData.targetRotY = 0;
             mesh.userData.targetRotZ = 0;
 
-            // Pulse (Low threshold for more movement)
-            if (normFreq > 0.1) {
-                mesh.userData.targetZ = normFreq * 30; // Stronger pop
+            // Basic Pulse
+            if (normFreq > 0.4) {
+                mesh.userData.targetZ = normFreq * 20;
             }
 
-            // Beat Glitch
-            if (isBeat && normFreq > 0.3) {
-                mesh.userData.targetZ = 50 + (Math.random() * 20); // Big pop
+            // Beat Glitch / Jitter
+            if (isBeat && normFreq > 0.5) {
+                // Scale Z-pop by jitter amount (at least 20, up to 70 + rand)
+                const intensity = this.jitterAmount * 2.0; // 0 to 2.0 multiplier
 
+                mesh.userData.targetZ = 50 + (Math.random() * 20) * intensity;
+
+                // Rotations are the main "jitter" visual
+                // Probability of rotation depends on jitter amount
                 const rand = Math.random();
-                if (rand < 0.3) {
-                    // Spin X
-                    mesh.userData.targetRotX = Math.PI;
-                } else if (rand < 0.6) {
-                    // Spin Y
-                    mesh.userData.targetRotY = Math.PI;
-                } else {
-                    // Spin Z
-                    mesh.userData.targetRotZ = Math.PI / 2;
+
+                // Only rotate if random value is within jitter threshold
+                // If jitter is 0, no rotations. If jitter is 1, lots.
+                if (Math.random() < this.jitterAmount) {
+                    if (rand < 0.3) {
+                        mesh.userData.targetRotX = Math.PI * (0.5 + Math.random());
+                    } else if (rand < 0.6) {
+                        mesh.userData.targetRotY = Math.PI * (0.5 + Math.random());
+                    } else {
+                        mesh.userData.targetRotZ = Math.PI / 2;
+                    }
                 }
             }
 
-            // Physics Lerp
-            // Z
             mesh.position.z += (mesh.userData.targetZ - mesh.position.z) * 0.2;
 
             // Rotation

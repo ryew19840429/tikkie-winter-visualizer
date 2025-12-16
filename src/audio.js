@@ -61,15 +61,32 @@ export class AudioController {
         const average = sum / this.bufferLength;
         const normalizedEnergy = average / 256;
 
-        let isBeat = false;
-        if (normalizedEnergy > this.beatThreshold && normalizedEnergy > this.currentEnergy) {
-            isBeat = true;
-            this.beatThreshold = normalizedEnergy * 1.1; // Temporarily raise threshold
-        } else {
-            this.beatThreshold *= this.beatDecay; // Decay threshold
-            this.beatThreshold = Math.max(this.beatThreshold, 0.3); // Min threshold
+        // Low-Frequency Beat Detection (Kicks)
+        // FFT Size 2048, Sample Rate ~44100 -> Bin width ~21.5 Hz
+        // We want ~20Hz to ~160Hz. So roughly bins 1 to 8.
+        let bassSum = 0;
+        let bassCount = 0;
+        for (let i = 1; i < 10; i++) {
+            bassSum += this.dataArray[i];
+            bassCount++;
         }
-        this.currentEnergy = normalizedEnergy;
+        const bassAverage = bassSum / bassCount;
+        const normalizedBass = bassAverage / 255;
+
+        let isBeat = false;
+        // Use BASS energy for thresholding, not overall average
+        if (normalizedBass > this.beatThreshold && normalizedBass > this.currentEnergy) {
+            isBeat = true;
+            this.beatThreshold = normalizedBass * 1.1; // Jump threshold
+        } else {
+            this.beatThreshold *= 0.90; // Faster decay for snappier beats
+            this.beatThreshold = Math.max(this.beatThreshold, 0.4); // Higher floor
+        }
+
+        // Prevent double-triggering too fast? 
+        // Logic handles this via threshold jumping above current energy
+
+        this.currentEnergy = normalizedBass;
 
         return {
             frequencyData: this.dataArray,
