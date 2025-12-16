@@ -52,17 +52,6 @@ logoImage.onload = () => {
 
 // UI Handling
 const uploadBtn = document.getElementById('upload-btn');
-const jitterSlider = document.getElementById('jitter-slider');
-const jitterValue = document.getElementById('jitter-value');
-
-if (jitterSlider) {
-  jitterSlider.addEventListener('input', (e) => {
-    const val = parseInt(e.target.value);
-    grid3d.setJitter(val / 100);
-    if (jitterValue) jitterValue.textContent = val + '%';
-  });
-}
-
 const fileInput = document.getElementById('file-input');
 const statusText = document.getElementById('status-text');
 

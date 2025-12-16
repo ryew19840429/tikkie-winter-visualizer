@@ -135,10 +135,13 @@ export class Grid3D {
         const { frequencyData, isBeat } = audioData;
 
         // Default jitter if not set (though it's set in constructor now)
-        if (this.jitterAmount === undefined) this.jitterAmount = 0.5;
+        if (this.jitterAmount === undefined) this.jitterAmount = 0.5; // Default 50%
 
         this.meshes.forEach(mesh => {
-            const freq = frequencyData[mesh.userData.mappedIndex % frequencyData.length];
+            // Emphasize Kick & Snare (Lows and Mids)
+            // Limit mapping to the first ~300 bins (0-6000Hz approx) 
+            // instead of the full 1024 spectrum which includes high-frequency noise.
+            const freq = frequencyData[mesh.userData.mappedIndex % 300];
             const normFreq = freq / 255;
 
             mesh.userData.targetScale = 1;
@@ -147,24 +150,22 @@ export class Grid3D {
             mesh.userData.targetRotY = 0;
             mesh.userData.targetRotZ = 0;
 
-            // Basic Pulse
-            if (normFreq > 0.4) {
-                mesh.userData.targetZ = normFreq * 20;
-            }
+            // Smoothing: Remove hard threshold pulsing which causes jitter when freq hovers around 0.4
+            // Continuous mapping:
+            // Normalize inputs slightly: ignore very low noise (<0.1)
+            const smoothFreq = Math.max(0, normFreq - 0.15);
 
-            // Beat Glitch / Jitter
+            // Apply scale
+            mesh.userData.targetZ = smoothFreq * 40; // Max Z ~35
+
+            // Beat Glitch / Jitter overrides this
             if (isBeat && normFreq > 0.5) {
-                // Scale Z-pop by jitter amount (at least 20, up to 70 + rand)
-                const intensity = this.jitterAmount * 2.0; // 0 to 2.0 multiplier
-
+                // ... (TargetZ might get overwritten here for the pop)
+                const intensity = this.jitterAmount * 2.0;
                 mesh.userData.targetZ = 50 + (Math.random() * 20) * intensity;
 
-                // Rotations are the main "jitter" visual
-                // Probability of rotation depends on jitter amount
+                // ... (Rotation logic remains same)
                 const rand = Math.random();
-
-                // Only rotate if random value is within jitter threshold
-                // If jitter is 0, no rotations. If jitter is 1, lots.
                 if (Math.random() < this.jitterAmount) {
                     if (rand < 0.3) {
                         mesh.userData.targetRotX = Math.PI * (0.5 + Math.random());
@@ -176,7 +177,8 @@ export class Grid3D {
                 }
             }
 
-            mesh.position.z += (mesh.userData.targetZ - mesh.position.z) * 0.2;
+            // Smoother lerp (0.2 -> 0.1)
+            mesh.position.z += (mesh.userData.targetZ - mesh.position.z) * 0.1;
 
             // Rotation
             // We accumulate rotation? Or start from 0? 
@@ -195,9 +197,9 @@ export class Grid3D {
 
         // Gentle Global Sway (Orbital Effect)
         // We rotate the whole group slightly to simulate camera movement
-        // Keep it subtle: +/- 0.2 radians
+        // Increased amplitude per user request
         const time = Date.now() * 0.0005;
-        this.group.rotation.y = Math.sin(time) * 0.2;
-        this.group.rotation.x = Math.cos(time * 0.7) * 0.1;
+        this.group.rotation.y = Math.sin(time) * 0.5; // Was 0.2
+        this.group.rotation.x = Math.cos(time * 0.7) * 0.25; // Was 0.1
     }
 }
